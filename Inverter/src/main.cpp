@@ -12,7 +12,7 @@ Project group 16
 #define test_pin 4
 
 //define variables
-int voltMeas, highestValue;
+int netVoltMeas, highestValue;
 float netFreq;
 bool signal;
 //unsigned long to not overflow the buffer
@@ -38,29 +38,22 @@ void setup() {
 
 int readSensors(){
   //measure and safe the voltage measurements
-  voltMeas = analogRead(netVoltMeas_pin);
+  netVoltMeas = analogRead(netVoltMeas_pin);
 }
 
-void loop() {
-  //delay cause otherwise arduino brakes
-  delay(1);
+int calculateFrequency(){
 
-  //update currentmillis on every loop
-  currentMillis = millis();
+  if (netVoltMeas > highestValue){
+      highestValue = netVoltMeas;
+    }
 
-  readSensors();
-
-  if (voltMeas > highestValue){
-    highestValue = voltMeas;
-  }
-
-  if (voltMeas < (0+0.1*highestValue) && signal == 1){
+  if (netVoltMeas < (0+0.1*highestValue) && signal == 1){
     digitalWrite(LED_pin,0);
     zeroPointMillisBuf.push(currentMillis);
     signal = 0;
   }
 
-  if (voltMeas > highestValue-(0.1*highestValue)){
+  if (netVoltMeas > highestValue-(0.1*highestValue)){
     digitalWrite(LED_pin,1);
     signal = 1;
   }
@@ -76,5 +69,19 @@ void loop() {
     Serial.println("Hz");
     timerMillis = currentMillis;
   }
+}
+
+void loop() {
+  //delay cause otherwise arduino brakes
+  delay(1);
+
+  //update currentmillis on every loop
+  currentMillis = millis();
+
+  //read the sensors every loop
+  readSensors();
+
+  //calculate the frequency every loop
+  calculateFrequency();
 
 }
