@@ -1,5 +1,5 @@
 /*
-Invert code
+Inverter code
 Project group 16
 */
 
