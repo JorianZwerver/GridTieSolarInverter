@@ -7,7 +7,7 @@ Project group 16
 #include <CircularBuffer.h>
 
 #define LED_pin 19
-#define voltMeas_pin 2
+#define netVoltMeas_pin 2
 #define test_pin 4
 
 int voltMeas, highestValue;
@@ -24,7 +24,7 @@ CircularBuffer<unsigned long, 6> zeroPointMillisBuf;
 
 void setup() {  
   pinMode(LED_pin, OUTPUT);
-  pinMode(voltMeas_pin, INPUT);
+  pinMode(netVoltMeas_pin, INPUT);
 
   Serial.begin(115200);
 
@@ -39,7 +39,7 @@ void loop() {
   delay(1);
   currentMillis = millis();
 
-  voltMeas = analogRead(voltMeas_pin);
+  voltMeas = analogRead(netVoltMeas_pin);
 
   if (voltMeas > highestValue){
     highestValue = voltMeas;
