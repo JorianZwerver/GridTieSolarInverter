@@ -36,9 +36,6 @@ void setup() {
 }
 
 void loop() {
-  //digitalWrite(LED_pin,0);
-
-
   delay(1);
   currentMillis = millis();
 
