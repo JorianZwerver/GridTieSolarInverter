@@ -4,8 +4,11 @@
   Using TTGO-T7 v1.3 esp-32 microcontroller
 */
 
+//include used libraries
 #include <Arduino.h>
 #include <CircularBuffer.h>
+#include <PID_v1.h>
+
 
 //define used hardware pins
 #define LED_pin 19
