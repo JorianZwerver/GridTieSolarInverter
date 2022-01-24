@@ -1,5 +1,5 @@
 /*
-  Inverter code
+  Inverter firmware code
   Project group 16
   Using TTGO-T7 v1.3 esp-32 microcontroller
 */
@@ -11,16 +11,17 @@
 
 
 //define used hardware pins
-#define LED_pin 19
+#define LED_pin LED_BUILTIN
 #define netVoltMeas_pin 2
-#define invVoltMeas_pin 3
-#define PWMPosOut_pin 4
-#define PWMNegOut_pin 5
+#define invVoltMeas_pin 4
+#define PWMPosOut_pin 12
+#define PWMNegOut_pin 32
 #define test_pin 4
 
 //setting PWM properties
 #define PWMFreq 20000
-#define PWMLedChannel 0
+#define PWMPosOutChannel 0
+#define PWMNegOutChannel 1
 #define PWMResolution 8
 
 //define variables
@@ -29,6 +30,8 @@ double netFreq;
 bool signal;
 //unsigned long to not overflow the buffer
 unsigned long currentMillis, zeroPointMillis, timerMillis;
+
+char printBuffer[100];
 
 CircularBuffer<int, 5> voltMeasBuf; //circular buffer of the voltage measurements
 CircularBuffer<unsigned long, 6> zeroPointMillisBuf; //circular buffer of the zeroPoits in ms
@@ -46,10 +49,12 @@ void setup() {
   pinMode(netVoltMeas_pin, INPUT);
 
   // configure LED PWM functionalitites
-  ledcSetup(PWMLedChannel, PWMFreq, PWMResolution);
+  ledcSetup(PWMPosOutChannel, PWMFreq, PWMResolution);
+  ledcSetup(PWMNegOutChannel, PWMFreq, PWMResolution);
 
   // attach the channel to the GPIO to be controlled
-  ledcAttachPin(PWMPosOut_pin, PWMLedChannel);
+  ledcAttachPin(PWMPosOut_pin, PWMPosOutChannel);
+  ledcAttachPin(PWMNegOut_pin, PWMNegOutChannel);
 
   Serial.begin(115200);
 
@@ -82,9 +87,7 @@ int calculateFrequency(){
     digitalWrite(LED_pin,0);
     zeroPointMillisBuf.push(currentMillis);
     signal = 0;
-  }
-
-  if (netVoltMeas > highestValue-(0.1*highestValue)){
+  } else if (netVoltMeas > highestValue-(0.1*highestValue)){
     digitalWrite(LED_pin,1);
     signal = 1;
   }
@@ -93,27 +96,28 @@ int calculateFrequency(){
     netFreq = 5000/(zeroPointMillisBuf.last() - zeroPointMillisBuf.first());
   }
 
+  //only print every 250ms
   if ((currentMillis - timerMillis) > 250){
-    
-    Serial.print("Net Frequency : ");
-    Serial.print(netFreq);
-    Serial.println("Hz");
+    sprintf(printBuffer, "Net freq. : %f Hz", netFreq);
+    Serial.println(printBuffer);
     timerMillis = currentMillis;
   }
 
   return netFreq;
 }
 
-int writePWM(){
+int writePWM(float freqOutput){
   int PWMDutyCycle;
 
-  PWMDutyCycle = pow(PWMResolution,2)*sin(netFreq*loopTimer);
+  loopTimer = currentMillis;
+
+  PWMDutyCycle = pow(PWMResolution,2)*sin(TWO_PI*freqOutput*loopTimer);
 
   //dont write a negative dutycycle
   if (PWMDutyCycle >= 0){
-    ledcWrite(PWMLedChannel, PWMDutyCycle);
+    ledcWrite(PWMPosOutChannel, PWMDutyCycle);
   } else if (PWMDutyCycle < 0){
-    ledcWrite(PWMLedChannel, -PWMDutyCycle);
+    ledcWrite(PWMNegOutChannel, -PWMDutyCycle);
   }
   
   return 0;
@@ -121,7 +125,7 @@ int writePWM(){
 
 void loop() {
   //delay cause otherwise arduino breakes
-  delay(1);
+  delayMicroseconds(30);
 
   //update currentmillis on every loop
   currentMillis = millis();
@@ -132,10 +136,12 @@ void loop() {
   //calculate the frequency every loop
   netFreq = calculateFrequency();
 
+  freqSetPoint = netFreq;
+
   PWMPID.Compute();
 
 
   //write the PWM for the H-bridge
-  //writePWM(FreqSetPoint, FreqError, PhaseSetPoint);
+  writePWM(freqOutput);
 
 }
