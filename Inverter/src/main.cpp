@@ -9,7 +9,11 @@
 #include <CircularBuffer.h>
 #include <PID_v1.h>
 
-#define DEBUG 1
+#define DEBUG 0
+#define DEBUG2 0
+#define DEBUG_readings 0
+#define DEBUG_pid 1
+#define DEBUG_freqCalc 1
 
 //define used hardware pins
 #define LED_pin LED_BUILTIN
@@ -24,6 +28,8 @@
 #define PWMPosOutChannel 0
 #define PWMNegOutChannel 1
 #define PWMResolution 8
+
+#define measDeadZone 0.2
 
 //define variables
 int netVoltMeas, invVoltMeas, highestValue, loopTimer;
@@ -74,6 +80,11 @@ int readSensors(){
   netVoltMeas = analogRead(netVoltMeas_pin);
   invVoltMeas = analogRead(invVoltMeas_pin);
 
+  #if DEBUG_readings
+    sprintf(printBuffer, "netVoltMeas : %d", netVoltMeas);
+    Serial.println(printBuffer);
+  #endif
+
   return 0;
 }
 
@@ -82,13 +93,17 @@ int calculateFrequency(){
 
   if (netVoltMeas > highestValue){
       highestValue = netVoltMeas;
+        #if DEBUG_freqCalc
+          sprintf(printBuffer, "highestValue : %d", highestValue);
+          Serial.println(printBuffer);
+        #endif
     }
 
-  if (netVoltMeas < (0+0.1*highestValue) && signal == 1){
+  if (netVoltMeas < (0+measDeadZone*highestValue) && signal == 1){
     digitalWrite(LED_pin,0);
     zeroPointMillisBuf.push(currentMillis);
     signal = 0;
-  } else if (netVoltMeas > highestValue-(0.1*highestValue)){
+  } else if (netVoltMeas > highestValue-(measDeadZone*highestValue)){
     digitalWrite(LED_pin,1);
     signal = 1;
   }
@@ -112,25 +127,33 @@ int writePWM(float freqOutput){
 
   loopTimer = currentMillis;
 
-  #if DEBUG
+  #if DEBUG2
     freqOutput = 50;
   #endif
 
-  PWMDutyCycle = pow(PWMResolution,2)*sin(TWO_PI*freqOutput*loopTimer*0.001);
+  PWMDutyCycle = pow(2, PWMResolution)*sin(TWO_PI*freqOutput*loopTimer*0.001);
+
+  #if DEBUG2
+    sprintf(printBuffer, "Dutycycle : %d", PWMDutyCycle);
+    Serial.println(printBuffer);
+  #endif
 
   //dont write a negative dutycycle
   if (PWMDutyCycle >= 0){
     ledcWrite(PWMPosOutChannel, PWMDutyCycle);
+    ledcWrite(PWMNegOutChannel, 0);
   } else if (PWMDutyCycle < 0){
     ledcWrite(PWMNegOutChannel, -PWMDutyCycle);
+    ledcWrite(PWMPosOutChannel, 0);
   }
   
   return 0;
 }
 
 void loop() {
-  //delay cause otherwise arduino breakes
-  delayMicroseconds(30);
+  //delay cause otherwise arduino breaks
+  //delayMicroseconds(30);
+  delay(1);
 
   //update currentmillis on every loop
   currentMillis = millis();
@@ -143,11 +166,18 @@ void loop() {
   readSensors();
 
   //calculate the frequency every loop
+  
   netFreq = calculateFrequency();
 
   freqSetPoint = netFreq;
 
   PWMPID.Compute();
+
+  #if DEBUG_pid
+    sprintf(printBuffer, "freqOutput : %f", freqOutput);
+    //Serial.println(printBuffer);
+    freqOutput = freqSetPoint;
+  #endif
 
 
   //write the PWM for the H-bridge
