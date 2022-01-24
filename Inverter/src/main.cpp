@@ -9,6 +9,7 @@
 #include <CircularBuffer.h>
 #include <PID_v1.h>
 
+#define DEBUG 1
 
 //define used hardware pins
 #define LED_pin LED_BUILTIN
@@ -111,7 +112,11 @@ int writePWM(float freqOutput){
 
   loopTimer = currentMillis;
 
-  PWMDutyCycle = pow(PWMResolution,2)*sin(TWO_PI*freqOutput*loopTimer);
+  #if DEBUG
+    freqOutput = 50;
+  #endif
+
+  PWMDutyCycle = pow(PWMResolution,2)*sin(TWO_PI*freqOutput*loopTimer*0.001);
 
   //dont write a negative dutycycle
   if (PWMDutyCycle >= 0){
@@ -129,6 +134,10 @@ void loop() {
 
   //update currentmillis on every loop
   currentMillis = millis();
+  #if DEBUG
+    sprintf(printBuffer, "Currentmillis : %d", currentMillis);
+    Serial.println(printBuffer);
+  #endif
 
   //read the sensors every loop
   readSensors();
