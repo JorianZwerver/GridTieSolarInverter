@@ -13,7 +13,7 @@
 #define DEBUG2 0
 #define DEBUG_readings 0
 #define DEBUG_pid 1
-#define DEBUG_freqCalc 1
+#define DEBUG_freqCalc 0
 
 //define used hardware pins
 #define LED_pin LED_BUILTIN
@@ -31,6 +31,7 @@
 #define PWMResolution 8
 
 #define measDeadZone 0.5
+#define ZPMSamples 200 //zero point samples over which it calculates the frequency
 
 //define variables
 int netFreqVoltMeas, netPhaseVoltMeas, invVoltMeas, highestValue, loopTimer;
@@ -42,7 +43,7 @@ unsigned long currentMillis, zeroPointMillis, timerMillis;
 char printBuffer[100];
 
 CircularBuffer<int, 5> voltMeasBuf; //circular buffer of the voltage measurements
-CircularBuffer<unsigned long, 11> zeroPointMillisBuf; //circular buffer of the zeroPoits in ms
+CircularBuffer<unsigned long, (ZPMSamples+1)> zeroPointMillisBuf; //circular buffer of the zeroPoits in ms
 
 //Define PID Variables we'll be connecting to
 double freqSetPoint, Input, freqOutput;
@@ -111,13 +112,12 @@ double calculateFrequency(){
   }
 
   if (zeroPointMillisBuf.isFull()){
-    netFreq = 5000/(zeroPointMillisBuf.last() - zeroPointMillisBuf.first());
-    netFreq = 5000/101;
+    netFreq = ZPMSamples*500.0/(zeroPointMillisBuf.last() - zeroPointMillisBuf.first());
   }
 
   //only print every 250ms
   if ((currentMillis - timerMillis) > 250){
-    sprintf(printBuffer, "Net freq. : %lf Hz", netFreq);
+    sprintf(printBuffer, "Net freq. : %f Hz", double(netFreq));
     Serial.println(printBuffer);
     timerMillis = currentMillis;
   }
@@ -185,5 +185,6 @@ void loop() {
 
   //write the PWM for the H-bridge
   writePWM(freqOutput);
+
 
 }
