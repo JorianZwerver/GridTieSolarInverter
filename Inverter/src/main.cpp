@@ -112,7 +112,7 @@ double calculateFrequency(){
   }
 
   if (zeroPointMillisBuf.isFull()){
-    netFreq = ZPMSamples*500.0/(zeroPointMillisBuf.last() - zeroPointMillisBuf.first());
+    netFreq = (0.5*ZPMSamples*1000.0)/(zeroPointMillisBuf.last() - zeroPointMillisBuf.first());
   }
 
   //only print every 250ms
@@ -156,7 +156,7 @@ int writePWM(float freqOutput){
 void loop() {
   //delay cause otherwise arduino breaks
   //delayMicroseconds(30);
-  delay(1);
+  //delay(1);
 
   //update currentmillis on every loop
   currentMillis = millis();
