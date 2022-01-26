@@ -10,7 +10,7 @@
 #include <PID_v1.h>
 
 #define DEBUG 0
-#define DEBUG2 0
+#define DEBUG_pwm 1
 #define DEBUG_readings 0
 #define DEBUG_pid 1
 #define DEBUG_freqCalc 0
@@ -96,14 +96,6 @@ int readSensors(){
 double calculateFrequency(){
   //calculate the frequency of the net based of the timing between the high points in the measured sinusoidal signal from the net
 
-  // if (netFreqVoltMeas > highestValue){
-  //     highestValue = netFreqVoltMeas;
-  //       #if DEBUG_freqCalc
-  //         sprintf(printBuffer, "highestValue : %d", highestValue);
-  //         Serial.println(printBuffer);
-  //       #endif
-  //   }
-
   if (netFreqMeas && !prevNetFreqMeas){
     digitalWrite(LED_pin,0);
     startZeroPoint = currentMillis;
@@ -134,7 +126,7 @@ int writePWM(float freqOutput){
 
   loopTimer = currentMillis;
 
-  #if DEBUG2
+  #if DEBUG_pwm
     freqOutput = 50;
   #endif
 
