@@ -17,12 +17,12 @@
 
 //define used hardware pins
 #define LED_pin LED_BUILTIN
-#define netFreqVoltMeas_pin 2
+#define netFreqMeas_pin 15
 #define netPhaseVoltMeas_pin 4
 #define invVoltMeas_pin 4
 #define PWMPosOut_pin 12
 #define PWMNegOut_pin 32
-#define test_pin 4
+#define test_pin 15
 
 //setting PWM properties
 #define PWMFreq 20000
@@ -34,11 +34,11 @@
 #define ZPMSamples 200 //zero point samples over which it calculates the frequency
 
 //define variables
-int netFreqVoltMeas, netPhaseVoltMeas, invVoltMeas, highestValue, loopTimer;
+int netPhaseVoltMeas, invVoltMeas, highestValue, loopTimer;
 double netFreq;
-bool signal;
+bool signal, netFreqMeas, prevNetFreqMeas;
 //unsigned long to not overflow the buffer
-unsigned long currentMillis, zeroPointMillis, timerMillis;
+unsigned long currentMillis, zeroPointMillis, timerMillis, startZeroPoint, endZeroPoint;
 
 char printBuffer[100];
 
@@ -55,7 +55,7 @@ PID PWMPID(&netFreq, &freqOutput, &freqSetPoint, PWMPIDp, PWMPIDi, PWMPIDd, DIRE
 void setup() {  
   //set pin modes
   pinMode(LED_pin, OUTPUT);
-  pinMode(netFreqVoltMeas_pin, INPUT);
+  pinMode(netFreqMeas_pin, INPUT);
   pinMode(netPhaseVoltMeas_pin, INPUT);
 
   // configure LED PWM functionalitites
@@ -72,6 +72,7 @@ void setup() {
   timerMillis  = 0;
   zeroPointMillis = 0;
   signal = 0;
+  prevNetFreqMeas = 0;
 
   //turn the PWM PID on
   PWMPID.SetMode(AUTOMATIC);
@@ -80,12 +81,13 @@ void setup() {
 
 int readSensors(){
   //measure and save the voltage measurements
-  netFreqVoltMeas = analogRead(netFreqVoltMeas_pin);
+  netFreqMeas = digitalRead(netFreqMeas_pin);
   netPhaseVoltMeas = analogRead(netPhaseVoltMeas_pin);
 
   #if DEBUG_readings
-    sprintf(printBuffer, "netFreqVoltMeas : %d", netFreqVoltMeas);
-    Serial.println(printBuffer);
+    sprintf(printBuffer, "netFreqMeas : %d", netFreqMeas);
+    //Serial.println(printBuffer);
+    Serial.println(digitalRead(test_pin));
   #endif
 
   return 0;
@@ -94,21 +96,23 @@ int readSensors(){
 double calculateFrequency(){
   //calculate the frequency of the net based of the timing between the high points in the measured sinusoidal signal from the net
 
-  if (netFreqVoltMeas > highestValue){
-      highestValue = netFreqVoltMeas;
-        #if DEBUG_freqCalc
-          sprintf(printBuffer, "highestValue : %d", highestValue);
-          Serial.println(printBuffer);
-        #endif
-    }
+  // if (netFreqVoltMeas > highestValue){
+  //     highestValue = netFreqVoltMeas;
+  //       #if DEBUG_freqCalc
+  //         sprintf(printBuffer, "highestValue : %d", highestValue);
+  //         Serial.println(printBuffer);
+  //       #endif
+  //   }
 
-  if (netFreqVoltMeas < (0+measDeadZone*highestValue) && signal == 1){
+  if (netFreqMeas && !prevNetFreqMeas){
     digitalWrite(LED_pin,0);
-    zeroPointMillisBuf.push(currentMillis);
-    signal = 0;
-  } else if (netFreqVoltMeas > highestValue-(measDeadZone*highestValue)){
+    startZeroPoint = currentMillis;
+    prevNetFreqMeas = 1;
+  } else if (!netFreqMeas && prevNetFreqMeas){
     digitalWrite(LED_pin,1);
-    signal = 1;
+    endZeroPoint = currentMillis;
+    zeroPointMillisBuf.push(startZeroPoint+(endZeroPoint-startZeroPoint)/2);
+    prevNetFreqMeas = 0;
   }
 
   if (zeroPointMillisBuf.isFull()){
@@ -156,7 +160,7 @@ int writePWM(float freqOutput){
 void loop() {
   //delay cause otherwise arduino breaks
   //delayMicroseconds(30);
-  //delay(1);
+  delay(1);
 
   //update currentmillis on every loop
   currentMillis = millis();
