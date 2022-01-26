@@ -11,18 +11,18 @@
 
 #define DEBUG 0
 #define DEBUG2 0
-#define DEBUG_readings 1
+#define DEBUG_readings 0
 #define DEBUG_pid 1
 #define DEBUG_freqCalc 0
 
 //define used hardware pins
 #define LED_pin LED_BUILTIN
-#define netFreqMeas_pin 2
+#define netFreqMeas_pin 15
 #define netPhaseVoltMeas_pin 4
 #define invVoltMeas_pin 4
 #define PWMPosOut_pin 12
 #define PWMNegOut_pin 32
-#define test_pin 4
+#define test_pin 15
 
 //setting PWM properties
 #define PWMFreq 20000
@@ -31,7 +31,7 @@
 #define PWMResolution 8
 
 #define measDeadZone 0.5
-#define ZPMSamples 10 //zero point samples over which it calculates the frequency
+#define ZPMSamples 200 //zero point samples over which it calculates the frequency
 
 //define variables
 int netPhaseVoltMeas, invVoltMeas, highestValue, loopTimer;
@@ -87,7 +87,7 @@ int readSensors(){
   #if DEBUG_readings
     sprintf(printBuffer, "netFreqMeas : %d", netFreqMeas);
     //Serial.println(printBuffer);
-    Serial.println(netFreqMeas);
+    Serial.println(digitalRead(test_pin));
   #endif
 
   return 0;
