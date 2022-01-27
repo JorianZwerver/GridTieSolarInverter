@@ -20,6 +20,8 @@
 #define DEBUG_readings 0
 #define DEBUG_pid 1
 #define DEBUG_freqCalc 0
+#define DEBUG_dc 0
+#define DEBUG_phase 1
 
 //define used hardware pins
 #define LED_pin LED_BUILTIN
@@ -46,7 +48,7 @@ int invVoltMeas;
 double netFreq, phaseDiff;
 bool signal, netFreqMeas, prevNetFreqMeas, netPhaseMeas, prevNetPhaseMeas;
 //unsigned long to not overflow the buffer
-unsigned long currentMillis, zeroPointMillis, timerMillis, startZeroPoint, endZeroPoint, loopTimer;
+unsigned long currentMillis, zeroPointMillis, timerMillis, timer2Millis, startZeroPoint, endZeroPoint, loopTimer;
 unsigned long peakPointMillis, outputPeakPointMillis, startPeakPoint, endPeakPoint;
 
 char printBuffer[100];
@@ -161,12 +163,21 @@ int measurePhaseDiff(){
 
   //10ms is 180degrees out of sync
   double halfWaveTime = (1000.0/netFreq)*0.5;
-  
+
   int millisDiff = (peakPointMillis-outputPeakPointMillis);
 
   double msPhaseDiff = fmod(double(millisDiff), halfWaveTime);
 
   phaseDiff = msPhaseDiff*(180/halfWaveTime);
+
+  #if DEBUG_phase
+    //only print every 250ms
+    if ((currentMillis - timer2Millis) > 250){
+      sprintf(printBuffer, "phaseDiff : %f", phaseDiff);
+      Serial.println(printBuffer);
+      timer2Millis = currentMillis;
+    }
+  #endif
 
   return phaseDiff;
 }
@@ -183,8 +194,11 @@ int writePWM(float freqOutput){
   //PWMDutyCycle = pow(2, PWMResolution)*sin(TWO_PI*freqOutput*loopTimer*0.001);
   PWMDutyCycle = 100*sin(TWO_PI*freqOutput*loopTimer*0.001);
 
+  if (PWMDutyCycle == 100){
+    outputPeakPointMillis = currentMillis;
+  }
 
-  #if DEBUG2
+  #if DEBUG_dc
     sprintf(printBuffer, "Dutycycle : %d", PWMDutyCycle);
     Serial.println(printBuffer);
   #endif
