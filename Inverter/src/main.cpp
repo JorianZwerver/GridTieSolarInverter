@@ -8,6 +8,13 @@
 #include <Arduino.h>
 #include <CircularBuffer.h>
 #include <PID_v1.h>
+#include <driver/mcpwm.h>
+
+#define PWMB 21
+#define PWMA 22
+
+#define PWM_A MCPWM_GEN_A
+#define PWM_B MCPWM_GEN_B
 
 #define DEBUG 0
 #define DEBUG_pwm 1
@@ -77,6 +84,22 @@ void setup() {
   //turn the PWM PID on
   PWMPID.SetMode(AUTOMATIC);
 
+
+  mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM0A, PWMA);
+  mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM0B, PWMB);
+
+  mcpwm_config_t pwm_config;
+    pwm_config.frequency = 1000;    //frequency,
+    pwm_config.cmpr_a = 0.0;    		//duty cycle of PWMxA = 0
+    pwm_config.cmpr_b = 0.0;    		//duty cycle of PWMxb = 0
+    pwm_config.counter_mode = MCPWM_UP_COUNTER;
+    pwm_config.duty_mode = MCPWM_DUTY_MODE_0;
+
+  mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_0, &pwm_config);
+
+  mcpwm_set_duty_type(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, MCPWM_DUTY_MODE_1);
+  mcpwm_set_duty_type(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_B, MCPWM_DUTY_MODE_0);
+
 }
 
 int readSensors(){
@@ -130,7 +153,9 @@ int writePWM(float freqOutput){
     freqOutput = 50;
   #endif
 
-  PWMDutyCycle = pow(2, PWMResolution)*sin(TWO_PI*freqOutput*loopTimer*0.001);
+  //PWMDutyCycle = pow(2, PWMResolution)*sin(TWO_PI*freqOutput*loopTimer*0.001);
+  PWMDutyCycle = 100*sin(TWO_PI*freqOutput*loopTimer*0.001);
+
 
   #if DEBUG2
     sprintf(printBuffer, "Dutycycle : %d", PWMDutyCycle);
@@ -139,11 +164,15 @@ int writePWM(float freqOutput){
 
   //dont write a negative dutycycle
   if (PWMDutyCycle >= 0){
-    ledcWrite(PWMPosOutChannel, PWMDutyCycle);
-    ledcWrite(PWMNegOutChannel, 0);
+    mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, PWMDutyCycle);
+    mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_B, PWMDutyCycle);
+    //ledcWrite(PWMPosOutChannel, PWMDutyCycle);
+    //ledcWrite(PWMNegOutChannel, 0);
   } else if (PWMDutyCycle < 0){
-    ledcWrite(PWMNegOutChannel, -PWMDutyCycle);
-    ledcWrite(PWMPosOutChannel, 0);
+    mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, -PWMDutyCycle);
+    mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_B, -PWMDutyCycle);
+    //ledcWrite(PWMNegOutChannel, -PWMDutyCycle);
+    //ledcWrite(PWMPosOutChannel, 0);
   }
   
   return 0;
