@@ -10,12 +10,11 @@
 #include <PID_v1.h>
 #include <driver/mcpwm.h>
 
-#define PWMB 21
-#define PWMA 22
-
+//define mcpwm sauce
 #define PWM_A MCPWM_GEN_A
 #define PWM_B MCPWM_GEN_B
 
+//define debug statements
 #define DEBUG 0
 #define DEBUG_pwm 1
 #define DEBUG_readings 0
@@ -25,11 +24,13 @@
 //define used hardware pins
 #define LED_pin LED_BUILTIN
 #define netFreqMeas_pin 15
-#define netPhaseVoltMeas_pin 4
+#define netPhaseMeas_pin 16
 #define invVoltMeas_pin 4
 #define PWMPosOut_pin 12
 #define PWMNegOut_pin 32
 #define test_pin 15
+#define PWMB 21
+#define PWMA 22
 
 //setting PWM properties
 #define PWMFreq 20000
@@ -37,20 +38,22 @@
 #define PWMNegOutChannel 1
 #define PWMResolution 8
 
-#define measDeadZone 0.5
 #define ZPMSamples 200 //zero point samples over which it calculates the frequency
+#define PPMSamples 10
 
 //define variables
-int netPhaseVoltMeas, invVoltMeas, highestValue, loopTimer;
-double netFreq;
-bool signal, netFreqMeas, prevNetFreqMeas;
+int invVoltMeas;
+double netFreq, phaseDiff;
+bool signal, netFreqMeas, prevNetFreqMeas, netPhaseMeas, prevNetPhaseMeas;
 //unsigned long to not overflow the buffer
-unsigned long currentMillis, zeroPointMillis, timerMillis, startZeroPoint, endZeroPoint;
+unsigned long currentMillis, zeroPointMillis, timerMillis, startZeroPoint, endZeroPoint, loopTimer;
+unsigned long peakPointMillis, outputPeakPointMillis, startPeakPoint, endPeakPoint;
 
 char printBuffer[100];
 
 CircularBuffer<int, 5> voltMeasBuf; //circular buffer of the voltage measurements
 CircularBuffer<unsigned long, (ZPMSamples+1)> zeroPointMillisBuf; //circular buffer of the zeroPoits in ms
+CircularBuffer<unsigned long, (PPMSamples+1)> peakPointMillisBuf;
 
 //Define PID Variables we'll be connecting to
 double freqSetPoint, Input, freqOutput;
@@ -63,7 +66,7 @@ void setup() {
   //set pin modes
   pinMode(LED_pin, OUTPUT);
   pinMode(netFreqMeas_pin, INPUT);
-  pinMode(netPhaseVoltMeas_pin, INPUT);
+  pinMode(netPhaseMeas_pin, INPUT);
 
   // configure LED PWM functionalitites
   ledcSetup(PWMPosOutChannel, PWMFreq, PWMResolution);
@@ -84,7 +87,7 @@ void setup() {
   //turn the PWM PID on
   PWMPID.SetMode(AUTOMATIC);
 
-
+  //config the mcpwm
   mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM0A, PWMA);
   mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM0B, PWMB);
 
@@ -105,7 +108,7 @@ void setup() {
 int readSensors(){
   //measure and save the voltage measurements
   netFreqMeas = digitalRead(netFreqMeas_pin);
-  netPhaseVoltMeas = analogRead(netPhaseVoltMeas_pin);
+  netPhaseMeas = digitalRead(netPhaseMeas_pin);
 
   #if DEBUG_readings
     sprintf(printBuffer, "netFreqMeas : %d", netFreqMeas);
@@ -142,6 +145,30 @@ double calculateFrequency(){
   }
 
   return netFreq;
+}
+
+int measurePhaseDiff(){
+  //calculate phase difference between measurement of the net and outputted sin signal
+
+  if (netPhaseMeas && !prevNetPhaseMeas){
+    startPeakPoint = currentMillis;
+    prevNetPhaseMeas = 1;
+  } else if (!netPhaseMeas && prevNetPhaseMeas){
+    endPeakPoint = currentMillis;
+    peakPointMillis = (startPeakPoint+(endPeakPoint-startPeakPoint)/2);
+    prevNetPhaseMeas = 0;
+  }
+
+  //10ms is 180degrees out of sync
+  double halfWaveTime = (1000.0/netFreq)*0.5;
+  
+  int millisDiff = (peakPointMillis-outputPeakPointMillis);
+
+  double msPhaseDiff = fmod(double(millisDiff), halfWaveTime);
+
+  phaseDiff = msPhaseDiff*(180/halfWaveTime);
+
+  return phaseDiff;
 }
 
 int writePWM(float freqOutput){
@@ -194,8 +221,10 @@ void loop() {
   readSensors();
 
   //calculate the frequency every loop
-  
   netFreq = calculateFrequency();
+
+  //calculate the phase difference every loop
+  phaseDiff = measurePhaseDiff();
 
   freqSetPoint = netFreq;
 
