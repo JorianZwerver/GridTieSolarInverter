@@ -188,7 +188,7 @@ int measurePhaseDiff(){
   return phaseDiff;
 }
 
-int writePWM(float freqOutput){
+int writePWM(float freqOutput, double phaseOffset){
   int PWMDutyCycle;
 
   loopTimer = currentMillis;
@@ -286,7 +286,7 @@ void loop() {
 
   //write the PWM for the H-bridge
   currentMicros = micros();
-  writePWM(freqOutput);
+  writePWM(freqOutput, phaseOffset);
 
 
 }
