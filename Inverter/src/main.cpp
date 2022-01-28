@@ -37,14 +37,16 @@ bridgeDriver IR2304 = bridgeDriver();
 #define safetyRelais2_pin 24
 #define bigRedButton_pin 25
 
+/*
 //setting PWM properties
 #define PWMFreq 20000
 #define PWMPosOutChannel 0
 #define PWMNegOutChannel 1
 #define PWMResolution 8
+*/
 
 #define ZPMSamples 200 //zero point samples over which it calculates the frequency
-#define PPMSamples 10
+#define PPMSamples 10 //peak point measuremets samples
 
 //define safety margins
 #define maxPhaseDiff 20
@@ -121,9 +123,9 @@ int readSensors(){
   return 0;
 }
 
+//calculate the frequency of the net based of the timing between the high points in the measured sinusoidal signal from the net
 double calculateFrequency(){
-  //calculate the frequency of the net based of the timing between the high points in the measured sinusoidal signal from the net
-
+  // find the high point and save the timestamp
   if (netFreqMeas && !prevNetFreqMeas){
     digitalWrite(LED_pin,0);
     startZeroPoint = currentMicros;
@@ -135,8 +137,9 @@ double calculateFrequency(){
     prevNetFreqMeas = 0;
   }
 
+  //calculate the freq when there are enough samples
   if (zeroPointMicrosBuf.isFull()){
-    netFreq = (0.5*ZPMSamples*1000.0)/(zeroPointMicrosBuf.last() - zeroPointMicrosBuf.first());
+    netFreq = (0.5*ZPMSamples*1000000.0)/(zeroPointMicrosBuf.last() - zeroPointMicrosBuf.first());
   }
 
   //only print every 250ms
@@ -162,18 +165,21 @@ int measurePhaseDiff(){
   }
 
   //10ms is 180degrees out of sync
-  double halfWaveTime = (10000.0/netFreq)*0.5;
+  double halfWaveTime = (1000000.0/netFreq)*0.5;
 
+  //difference between the peaks of the measured signal and produced sin for the pwm
   int microsDiff = (peakPointMicros-outputPeakPointMicros);
 
+  //remove whole wave differences
   double msPhaseDiff = fmod(double(microsDiff), halfWaveTime);
 
+  //phase differenc ein degrees 
   phaseDiff = msPhaseDiff*(180/halfWaveTime);
 
   #if DEBUG_phase
     //only print every 250ms
     if ((currentMillis - timer2Millis) > 250){
-      sprintf(printBuffer, "phaseDiff : %0.3f Degrees", phaseDiff);
+      sprintf(printBuffer, "phaseDiff : %0.3f Degrees, microsdiff : %d micS", phaseDiff, microsDiff);
       Serial.println(printBuffer);
       timer2Millis = currentMillis;
     }
@@ -188,7 +194,7 @@ int writePWM(float freqOutput){
   loopTimer = currentMillis;
 
   #if DEBUG_pwm
-    freqOutput = 50;
+    freqOutput = 50.0;
     phaseOffset = 0;
   #endif
 
@@ -211,7 +217,7 @@ int writePWM(float freqOutput){
     //ledcWrite(PWMPosOutChannel, PWMDutyCycle);
     //ledcWrite(PWMNegOutChannel, 0);
   } else if (PWMDutyCycle < 0){
-    IR2304.setDuty(-PWMDutyCycle, 0);
+    IR2304.setDuty(PWMDutyCycle, 0);
     //mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, -PWMDutyCycle);
     //mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_B, -PWMDutyCycle);
     //ledcWrite(PWMNegOutChannel, -PWMDutyCycle);
@@ -225,6 +231,7 @@ int disableOutput(){
   //disable the output by turning the safetyrelais off
   digitalWrite(safetyRelais1_pin, 0);
   digitalWrite(safetyRelais2_pin, 0);
+  return 0;
 }
 
 int safetyCheck(){
@@ -234,6 +241,8 @@ int safetyCheck(){
   if (digitalRead(bigRedButton_pin)){
     disableOutput();
   }
+
+  return 0;
 }
 
 void loop() {
