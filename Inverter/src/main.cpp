@@ -201,7 +201,7 @@ int writePWM(float freqOutput){
     //ledcWrite(PWMPosOutChannel, PWMDutyCycle);
     //ledcWrite(PWMNegOutChannel, 0);
   } else if (PWMDutyCycle < 0){
-    IR2304.setDuty(PWMDutyCycle, 0);
+    IR2304.setDuty(-PWMDutyCycle, 0);
     //mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, -PWMDutyCycle);
     //mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_B, -PWMDutyCycle);
     //ledcWrite(PWMNegOutChannel, -PWMDutyCycle);
