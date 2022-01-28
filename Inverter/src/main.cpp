@@ -90,6 +90,7 @@ void setup() {
 
   //turn the PWM PID on
   PWMPID.SetMode(AUTOMATIC);
+  phasePID.SetMode(AUTOMATIC);
 
   //config the mcpwm
   IR2304.init(PWMA, PWMB, 0, 20000);
@@ -142,6 +143,8 @@ double calculateFrequency(){
 int measurePhaseDiff(){
   //calculate phase difference between measurement of the net and outputted sin signal
 
+  
+  //find the peaks of the sin by checking the measurements for the optocouplesrs and save the timestamp
   if (netPhaseMeas && !prevNetPhaseMeas){
     startPeakPoint = currentMillis;
     prevNetPhaseMeas = 1;
@@ -234,7 +237,9 @@ void loop() {
 
   freqSetPoint = netFreq;
 
+  //calculate the correction every loop using the PID algorithms
   PWMPID.Compute();
+  phasePID.Compute();
 
   #if DEBUG_pid
     sprintf(printBuffer, "freqOutput : %f", freqOutput);
