@@ -45,7 +45,7 @@
 
 //define variables
 int invVoltMeas;
-double netFreq, phaseDiff;
+double netFreq, phaseDiff, phaseOffset;
 bool signal, netFreqMeas, prevNetFreqMeas, netPhaseMeas, prevNetPhaseMeas;
 //unsigned long to not overflow the buffer
 unsigned long currentMillis, zeroPointMillis, timerMillis, timer2Millis, startZeroPoint, endZeroPoint, loopTimer;
@@ -58,11 +58,13 @@ CircularBuffer<unsigned long, (ZPMSamples+1)> zeroPointMillisBuf; //circular buf
 CircularBuffer<unsigned long, (PPMSamples+1)> peakPointMillisBuf;
 
 //Define PID Variables we'll be connecting to
-double freqSetPoint, Input, freqOutput;
+double freqSetPoint, phaseSetPoint, Input, freqOutput;
 
 //Specify the PID links and initial tuning parameters
 double PWMPIDp=2, PWMPIDi=5, PWMPIDd=1;
+double phasePIDp=2, phasePIDi=5, phasePIDd=1;
 PID PWMPID(&netFreq, &freqOutput, &freqSetPoint, PWMPIDp, PWMPIDi, PWMPIDd, DIRECT);
+PID phasePID(&phaseDiff, &phaseOffset, &phaseSetPoint, phasePIDd, phasePIDi, phasePIDd, DIRECT);
 
 void setup() {  
   //set pin modes
@@ -173,7 +175,7 @@ int measurePhaseDiff(){
   #if DEBUG_phase
     //only print every 250ms
     if ((currentMillis - timer2Millis) > 250){
-      sprintf(printBuffer, "phaseDiff : %f", phaseDiff);
+      sprintf(printBuffer, "phaseDiff : %0.3f Degrees", phaseDiff);
       Serial.println(printBuffer);
       timer2Millis = currentMillis;
     }
@@ -189,10 +191,10 @@ int writePWM(float freqOutput){
 
   #if DEBUG_pwm
     freqOutput = 50;
+    phaseOffset = 0;
   #endif
 
-  //PWMDutyCycle = pow(2, PWMResolution)*sin(TWO_PI*freqOutput*loopTimer*0.001);
-  PWMDutyCycle = 100*sin(TWO_PI*freqOutput*loopTimer*0.001);
+  PWMDutyCycle = 100*sin((TWO_PI*freqOutput*loopTimer*0.001)+phaseOffset);
 
   if (PWMDutyCycle == 100){
     outputPeakPointMillis = currentMillis;
