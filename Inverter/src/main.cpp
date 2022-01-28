@@ -33,6 +33,9 @@ bridgeDriver IR2304 = bridgeDriver();
 #define test_pin 15
 #define PWMB 21
 #define PWMA 22
+#define safetyRelais1_pin 23
+#define safetyRelais2_pin 24
+#define bigRedButton_pin 25
 
 //setting PWM properties
 #define PWMFreq 20000
@@ -43,19 +46,22 @@ bridgeDriver IR2304 = bridgeDriver();
 #define ZPMSamples 200 //zero point samples over which it calculates the frequency
 #define PPMSamples 10
 
+//define safety margins
+#define maxPhaseDiff 20
+
 //define variables
 int invVoltMeas;
 double netFreq, phaseDiff, phaseOffset;
 bool signal, netFreqMeas, prevNetFreqMeas, netPhaseMeas, prevNetPhaseMeas;
 //unsigned long to not overflow the buffer
-unsigned long currentMillis, zeroPointMillis, timerMillis, timer2Millis, startZeroPoint, endZeroPoint, loopTimer;
-unsigned long peakPointMillis, outputPeakPointMillis, startPeakPoint, endPeakPoint;
+unsigned long currentMillis, currentMicros, zeroPointMicros, timerMillis, timer2Millis, startZeroPoint, endZeroPoint, loopTimer;
+unsigned long peakPointMicros, outputPeakPointMicros, startPeakPoint, endPeakPoint;
 
 char printBuffer[100];
 
 CircularBuffer<int, 5> voltMeasBuf; //circular buffer of the voltage measurements
-CircularBuffer<unsigned long, (ZPMSamples+1)> zeroPointMillisBuf; //circular buffer of the zeroPoits in ms
-CircularBuffer<unsigned long, (PPMSamples+1)> peakPointMillisBuf;
+CircularBuffer<unsigned long, (ZPMSamples+1)> zeroPointMicrosBuf; //circular buffer of the zeroPoints in microSec
+CircularBuffer<unsigned long, (PPMSamples+1)> peakPointMicrosBuf;
 
 //Define PID Variables we'll be connecting to
 double freqSetPoint, phaseSetPoint, Input, freqOutput;
@@ -69,9 +75,12 @@ PID phasePID(&phaseDiff, &phaseOffset, &phaseSetPoint, phasePIDd, phasePIDi, pha
 void setup() {  
   //set pin modes
   pinMode(LED_pin, OUTPUT);
+  pinMode(safetyRelais1_pin, OUTPUT);
+  pinMode(safetyRelais2_pin, OUTPUT);
   pinMode(netFreqMeas_pin, INPUT);
   pinMode(netPhaseMeas_pin, INPUT);
 
+/*
   // configure LED PWM functionalitites
   ledcSetup(PWMPosOutChannel, PWMFreq, PWMResolution);
   ledcSetup(PWMNegOutChannel, PWMFreq, PWMResolution);
@@ -79,12 +88,12 @@ void setup() {
   // attach the channel to the GPIO to be controlled
   ledcAttachPin(PWMPosOut_pin, PWMPosOutChannel);
   ledcAttachPin(PWMNegOut_pin, PWMNegOutChannel);
-
+*/
   Serial.begin(115200);
 
   //initialise some variables
   timerMillis  = 0;
-  zeroPointMillis = 0;
+  zeroPointMicros = 0;
   signal = 0;
   prevNetFreqMeas = 0;
 
@@ -117,17 +126,17 @@ double calculateFrequency(){
 
   if (netFreqMeas && !prevNetFreqMeas){
     digitalWrite(LED_pin,0);
-    startZeroPoint = currentMillis;
+    startZeroPoint = currentMicros;
     prevNetFreqMeas = 1;
   } else if (!netFreqMeas && prevNetFreqMeas){
     digitalWrite(LED_pin,1);
-    endZeroPoint = currentMillis;
-    zeroPointMillisBuf.push(startZeroPoint+(endZeroPoint-startZeroPoint)/2);
+    endZeroPoint = currentMicros;
+    zeroPointMicrosBuf.push(startZeroPoint+(endZeroPoint-startZeroPoint)/2);
     prevNetFreqMeas = 0;
   }
 
-  if (zeroPointMillisBuf.isFull()){
-    netFreq = (0.5*ZPMSamples*1000.0)/(zeroPointMillisBuf.last() - zeroPointMillisBuf.first());
+  if (zeroPointMicrosBuf.isFull()){
+    netFreq = (0.5*ZPMSamples*1000.0)/(zeroPointMicrosBuf.last() - zeroPointMicrosBuf.first());
   }
 
   //only print every 250ms
@@ -140,26 +149,24 @@ double calculateFrequency(){
   return netFreq;
 }
 
+//calculate phase difference between measurement of the net and outputted sin signal
 int measurePhaseDiff(){
-  //calculate phase difference between measurement of the net and outputted sin signal
-
-  
   //find the peaks of the sin by checking the measurements for the optocouplesrs and save the timestamp
   if (netPhaseMeas && !prevNetPhaseMeas){
-    startPeakPoint = currentMillis;
+    startPeakPoint = currentMicros;
     prevNetPhaseMeas = 1;
   } else if (!netPhaseMeas && prevNetPhaseMeas){
-    endPeakPoint = currentMillis;
-    peakPointMillis = (startPeakPoint+(endPeakPoint-startPeakPoint)/2);
+    endPeakPoint = currentMicros;
+    peakPointMicros = (startPeakPoint+(endPeakPoint-startPeakPoint)/2);
     prevNetPhaseMeas = 0;
   }
 
   //10ms is 180degrees out of sync
-  double halfWaveTime = (1000.0/netFreq)*0.5;
+  double halfWaveTime = (10000.0/netFreq)*0.5;
 
-  int millisDiff = (peakPointMillis-outputPeakPointMillis);
+  int microsDiff = (peakPointMicros-outputPeakPointMicros);
 
-  double msPhaseDiff = fmod(double(millisDiff), halfWaveTime);
+  double msPhaseDiff = fmod(double(microsDiff), halfWaveTime);
 
   phaseDiff = msPhaseDiff*(180/halfWaveTime);
 
@@ -188,7 +195,7 @@ int writePWM(float freqOutput){
   PWMDutyCycle = 100*sin((TWO_PI*freqOutput*loopTimer*0.001)+phaseOffset);
 
   if (PWMDutyCycle == 100){
-    outputPeakPointMillis = currentMillis;
+    outputPeakPointMicros = currentMicros;
   }
 
   #if DEBUG_dc
@@ -214,6 +221,21 @@ int writePWM(float freqOutput){
   return 0;
 }
 
+int disableOutput(){
+  //disable the output by turning the safetyrelais off
+  digitalWrite(safetyRelais1_pin, 0);
+  digitalWrite(safetyRelais2_pin, 0);
+}
+
+int safetyCheck(){
+  if (phaseDiff > maxPhaseDiff || phaseDiff < -maxPhaseDiff || netFreq < 48 || netFreq > 52){
+    disableOutput();
+  }
+  if (digitalRead(bigRedButton_pin)){
+    disableOutput();
+  }
+}
+
 void loop() {
   //delay cause otherwise arduino breaks
   //delayMicroseconds(30);
@@ -221,8 +243,9 @@ void loop() {
 
   //update currentmillis on every loop
   currentMillis = millis();
+  currentMicros = micros();
   #if DEBUG
-    sprintf(printBuffer, "Currentmillis : %d", currentMillis);
+    sprintf(printBuffer, "Currentmillis : %d, CurrentMicros : %d", currentMillis, currentMicros);
     Serial.println(printBuffer);
   #endif
 
@@ -230,9 +253,11 @@ void loop() {
   readSensors();
 
   //calculate the frequency every loop
+  currentMicros = micros();
   netFreq = calculateFrequency();
 
   //calculate the phase difference every loop
+  currentMicros = micros();
   phaseDiff = measurePhaseDiff();
 
   freqSetPoint = netFreq;
@@ -247,8 +272,11 @@ void loop() {
     freqOutput = freqSetPoint;
   #endif
 
+  safetyCheck();
+
 
   //write the PWM for the H-bridge
+  currentMicros = micros();
   writePWM(freqOutput);
 
 
