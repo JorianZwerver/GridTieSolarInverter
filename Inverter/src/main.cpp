@@ -9,10 +9,10 @@
 #include <CircularBuffer.h>
 #include <PID_v1.h>
 #include <driver/mcpwm.h>
+#include <bridgeDriver.h>
 
 //define mcpwm sauce
-#define PWM_A MCPWM_GEN_A
-#define PWM_B MCPWM_GEN_B
+bridgeDriver IR2304 = bridgeDriver();
 
 //define debug statements
 #define DEBUG 0
@@ -92,20 +92,8 @@ void setup() {
   PWMPID.SetMode(AUTOMATIC);
 
   //config the mcpwm
-  mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM0A, PWMA);
-  mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM0B, PWMB);
-
-  mcpwm_config_t pwm_config;
-    pwm_config.frequency = 1000;    //frequency,
-    pwm_config.cmpr_a = 0.0;    		//duty cycle of PWMxA = 0
-    pwm_config.cmpr_b = 0.0;    		//duty cycle of PWMxb = 0
-    pwm_config.counter_mode = MCPWM_UP_COUNTER;
-    pwm_config.duty_mode = MCPWM_DUTY_MODE_0;
-
-  mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_0, &pwm_config);
-
-  mcpwm_set_duty_type(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, MCPWM_DUTY_MODE_1);
-  mcpwm_set_duty_type(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_B, MCPWM_DUTY_MODE_0);
+  IR2304.init(PWMA, PWMB, 0, 20000);
+  IR2304.setInverting(true, 0);
 
 }
 
@@ -207,13 +195,15 @@ int writePWM(float freqOutput){
 
   //dont write a negative dutycycle
   if (PWMDutyCycle >= 0){
-    mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, PWMDutyCycle);
-    mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_B, PWMDutyCycle);
+    IR2304.setDuty(PWMDutyCycle, 0);
+    //mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, PWMDutyCycle);
+    //mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_B, PWMDutyCycle);
     //ledcWrite(PWMPosOutChannel, PWMDutyCycle);
     //ledcWrite(PWMNegOutChannel, 0);
   } else if (PWMDutyCycle < 0){
-    mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, -PWMDutyCycle);
-    mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_B, -PWMDutyCycle);
+    IR2304.setDuty(PWMDutyCycle, 0);
+    //mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, -PWMDutyCycle);
+    //mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_B, -PWMDutyCycle);
     //ledcWrite(PWMNegOutChannel, -PWMDutyCycle);
     //ledcWrite(PWMPosOutChannel, 0);
   }
