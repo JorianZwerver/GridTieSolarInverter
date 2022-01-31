@@ -47,11 +47,12 @@ bridgeDriver IR2304 = bridgeDriver();
 */
 
 #define ZPMSamples 200 //zero point samples over which it calculates the frequency
-#define PPMSamples 10 //peak point measuremets samples
+#define PPMSamples 1 //peak point measuremets samples
 
 //how often to print the information in ms
-#define freqPrintDelay 60000
-#define phasePrintDelay 50
+#define freqPrintDelay 250
+#define phasePrintDelay 5000
+#define timer3PrintDelay phasePrintDelay
 
 //define safety margins
 #define maxPhaseDiff 20
@@ -69,14 +70,15 @@ char printBuffer[100];
 CircularBuffer<int, 5> voltMeasBuf; //circular buffer of the voltage measurements
 CircularBuffer<unsigned long, (ZPMSamples+1)> zeroPointMicrosBuf; //circular buffer of the zeroPoints in microSec
 CircularBuffer<unsigned long, (PPMSamples+1)> peakPointMicrosBuf;
+CircularBuffer<unsigned long, (PPMSamples+1)> outputPeakPointMicrosBuf;
 CircularBuffer<unsigned long, (100)> loopTimingBuf;
 
 //Define PID Variables we'll be connecting to
-double freqSetPoint, phaseSetPoint, Input, freqOutput;
+double freqSetPoint, phaseSetPoint, freqOutput;
 
 //Specify the PID links and initial tuning parameters
 double freqPIDp=1, freqPIDi=1, freqPIDd=1;
-double phasePIDp=1, phasePIDi=1, phasePIDd=1;
+double phasePIDp=2, phasePIDi=1, phasePIDd=1;
 PID freqPID(&netFreq, &freqOutput, &freqSetPoint, freqPIDp, freqPIDi, freqPIDd, DIRECT);
 PID phasePID(&phaseDiff, &phaseOffset, &phaseSetPoint, phasePIDd, phasePIDi, phasePIDd, DIRECT);
 
@@ -104,7 +106,7 @@ void setup() {
   zeroPointMicros = 0;
   signal = 0;
   prevNetFreqMeas = 0;
-  phaseSetPoint = 0;
+  phaseSetPoint = 90;
 
   //turn the PWM PID on
   freqPID.SetMode(AUTOMATIC);
@@ -166,7 +168,7 @@ int measurePhaseDiff(){
     prevNetPhaseMeas = 1;
   } else if (!netPhaseMeas && prevNetPhaseMeas){
     endPeakPoint = currentMicros;
-    peakPointMicros = (startPeakPoint+(endPeakPoint-startPeakPoint)/2);
+    peakPointMicrosBuf.push((startPeakPoint+(endPeakPoint-startPeakPoint)/2));
     prevNetPhaseMeas = 0;
   }
 
@@ -174,7 +176,7 @@ int measurePhaseDiff(){
   double halfWaveTime = (1000000.0/netFreq)*0.5;
 
   //difference between the peaks of the measured signal and produced sin for the pwm
-  int microsDiff = (peakPointMicros-outputPeakPointMicros);
+  int microsDiff = (peakPointMicrosBuf.first()-outputPeakPointMicrosBuf.last());
 
   //remove whole wave differences
   double msPhaseDiff = fmod(double(microsDiff), halfWaveTime);
@@ -204,7 +206,7 @@ int writePWM(float freqOutput, double phaseOffset){
     phaseOffset = 0;
   #endif
 
-  PWMDutyCycle = 100*sin((TWO_PI*freqOutput*loopTimer*0.001)+(phaseOffset/180));
+  PWMDutyCycle = 100*sin((TWO_PI*freqOutput*loopTimer*0.001)+(PI*(phaseOffset/180)));
 
   if (PWMDutyCycle > 80 && !prevPWMDutyCycle){
     startOutputPeakPointMicros = currentMicros;
@@ -212,7 +214,7 @@ int writePWM(float freqOutput, double phaseOffset){
   } else if(PWMDutyCycle < 80 && prevPWMDutyCycle){
     endOutputPeakPointMicros = currentMicros;
     prevPWMDutyCycle = 0;
-    outputPeakPointMicros = startOutputPeakPointMicros+(endOutputPeakPointMicros - startOutputPeakPointMicros)/2;
+    outputPeakPointMicrosBuf.push(startOutputPeakPointMicros+(endOutputPeakPointMicros - startOutputPeakPointMicros)/2);
   }
 
   #if DEBUG_dc
@@ -255,7 +257,7 @@ int safetyCheck(float netFreq){
   */
   if (netFreq < 48 || netFreq > 52){
     disableOutput();
-    sprintf(printBuffer, "net frequecy out of bounds!! output disabled, netFreq: %f", netFreq);
+    sprintf(printBuffer, "net frequecy out of bounds!! Output disabled, netFreq: %f", netFreq);
     Serial.println(printBuffer);    
   }
   if (digitalRead(bigRedButton_pin)){
@@ -292,12 +294,13 @@ void loop() {
   freqSetPoint = netFreq;
 
   //calculate the correction every loop using the PID algorithms
+  //output go to freqOutput and phaseOffset
   freqPID.Compute();
   phasePID.Compute();
 
   #if DEBUG_pid
-    if ((currentMillis - timer3Millis) > 250){
-      sprintf(printBuffer, "freqOutput : %f, phaseOutput: %f", freqOutput, phaseOffset);
+    if ((currentMillis - timer3Millis) > timer3PrintDelay){
+      sprintf(printBuffer, "freqOutput : %f, phaseOutput: %f", freqOutput, 90-phaseOffset);
       Serial.println(printBuffer);
       timer3Millis = currentMillis;
     }
