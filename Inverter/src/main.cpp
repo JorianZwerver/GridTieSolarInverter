@@ -27,7 +27,8 @@ bridgeDriver IR2304 = bridgeDriver();
 //define used hardware pins
 #define LED_pin LED_BUILTIN
 #define netFreqMeas_pin 15
-#define netPhaseMeas_pin 14
+#define netPhaseMeas_pin 35
+#define netPhaseMeas2_pin 32
 #define invVoltMeas_pin 4
 #define PWMPosOut_pin 12
 #define PWMNegOut_pin 32
@@ -84,12 +85,11 @@ double phasePIDp=2, phasePIDi=1, phasePIDd=1;
 PID freqPID(&netFreq, &freqOutput, &freqSetPoint, freqPIDp, freqPIDi, freqPIDd, DIRECT);
 PID phasePID(&phaseDiff, &phaseOffset, &phaseSetPoint, phasePIDd, phasePIDi, phasePIDd, DIRECT);
 
-void IRAM_ATTR phaseMeasRise(){
+void IRAM_ATTR phaseMeasRise_ISR(){
   startPeakPoint = micros();
-  Serial.printf("Rise triggerd");
 }
 
-void IRAM_ATTR phaseMeasFall(){
+void IRAM_ATTR phaseMeasFall_ISR(){
   endPeakPoint = micros();
   peakPointMicrosBuf.push((startPeakPoint+((endPeakPoint-startPeakPoint)/2)));
 }
@@ -101,9 +101,10 @@ void setup() {
   pinMode(safetyRelais2_pin, OUTPUT);
   pinMode(netFreqMeas_pin, INPUT);
   pinMode(netPhaseMeas_pin, INPUT);
+  pinMode(netPhaseMeas2_pin, INPUT);
 
-  attachInterrupt(netPhaseMeas_pin, phaseMeasRise, RISING);
-  attachInterrupt(netPhaseMeas_pin, phaseMeasFall, FALLING);
+  attachInterrupt(netPhaseMeas_pin, phaseMeasRise_ISR, RISING);
+  attachInterrupt(netPhaseMeas2_pin, phaseMeasFall_ISR, FALLING);
 
 /*
   // configure LED PWM functionalitites
