@@ -35,7 +35,7 @@ void bridgeDriver::setDuty(float duty_cycle, int unit)
     if(duty_cycle <= 100 || duty_cycle >= 0) {
         mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, duty_cycle);
         mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_B, (100.0 - duty_cycle));
-    } else { return; }
+    } else { return; } 
 }
 
 void bridgeDriver::setInverting(bool inverting, int unit)
