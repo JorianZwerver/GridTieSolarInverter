@@ -50,12 +50,13 @@ bridgeDriver IR2304 = bridgeDriver();
 #define PPMSamples 1 //peak point measuremets samples
 
 //how often to print the information in ms
-#define freqPrintDelay 250
-#define phasePrintDelay 5000
-#define timer3PrintDelay phasePrintDelay
+#define freqPrintDelay 5000
+#define phasePrintDelay 250
+#define timer3PrintDelay 2500
 
 //define safety margins
 #define maxPhaseDiff 20
+#define maxFreqDiff 1
 
 //define variables
 int invVoltMeas;
@@ -63,7 +64,7 @@ double netFreq, phaseDiff, phaseOffset;
 bool signal, netFreqMeas, prevNetFreqMeas, netPhaseMeas, prevNetPhaseMeas, prevPWMDutyCycle;
 //unsigned long to not overflow the buffer
 unsigned long currentMillis, currentMicros, zeroPointMicros, timerMillis, timer2Millis, timer3Millis, startZeroPoint, endZeroPoint, loopTimer;
-unsigned long peakPointMicros, startOutputPeakPointMicros, endOutputPeakPointMicros, outputPeakPointMicros, startPeakPoint, endPeakPoint, loopStartMicros;
+unsigned long peakPointMicros, startOutputPeakPointMicros, endOutputPeakPointMicros, outputPeakPointMicros, theoOutputPeakPointMicros, startPeakPoint, endPeakPoint, loopStartMicros;
 
 char printBuffer[100];
 
@@ -176,7 +177,7 @@ int measurePhaseDiff(){
   double halfWaveTime = (1000000.0/netFreq)*0.5;
 
   //difference between the peaks of the measured signal and produced sin for the pwm
-  int microsDiff = (peakPointMicrosBuf.first()-outputPeakPointMicrosBuf.last());
+  int microsDiff = (peakPointMicrosBuf.last()-theoOutputPeakPointMicros);
 
   //remove whole wave differences
   double msPhaseDiff = fmod(double(microsDiff), halfWaveTime);
@@ -202,11 +203,17 @@ int writePWM(float freqOutput, double phaseOffset){
   loopTimer = currentMillis;
 
   #if DEBUG_pwm
-    //freqOutput = 50.1;
+    freqOutput = 50;
     phaseOffset = 0;
   #endif
 
   PWMDutyCycle = 100*sin((TWO_PI*freqOutput*loopTimer*0.001)+(PI*(phaseOffset/180)));
+  
+  //use maths to find the peak of the outputted sin
+  if (fmod(double(loopTimer),(0.5*PI))){
+    theoOutputPeakPointMicros = currentMicros;
+  }
+  
 
   if (PWMDutyCycle > 80 && !prevPWMDutyCycle){
     startOutputPeakPointMicros = currentMicros;
@@ -218,8 +225,10 @@ int writePWM(float freqOutput, double phaseOffset){
   }
 
   #if DEBUG_dc
-    sprintf(printBuffer, "Dutycycle : %d", PWMDutyCycle);
-    Serial.println(printBuffer);
+    if(PWMDutyCycle == 100){
+      sprintf(printBuffer, "Dutycycle at 100 gives micros: %d and calc PPM: %d and theo PPM: %d", currentMicros, outputPeakPointMicrosBuf.last(), theoOutputPeakPointMicros);
+      Serial.println(printBuffer);
+    }
   #endif
 
   //dont write a negative dutycycle
@@ -255,11 +264,18 @@ int safetyCheck(float netFreq){
     Serial.println(printBuffer);
   }
   */
-  if (netFreq < 48 || netFreq > 52){
+  if (netFreq < 50-maxFreqDiff || netFreq > 50+maxFreqDiff){
     disableOutput();
     sprintf(printBuffer, "net frequecy out of bounds!! Output disabled, netFreq: %f", netFreq);
-    Serial.println(printBuffer);    
+    Serial.println(printBuffer);
   }
+
+  if (currentMicros-zeroPointMicrosBuf.last() > 50000){
+    disableOutput();
+    sprintf(printBuffer, "No recent net frequecy measuremets found!! Output disabled");
+    Serial.println(printBuffer);
+  }
+
   if (digitalRead(bigRedButton_pin)){
     disableOutput();
   }
