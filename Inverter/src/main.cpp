@@ -61,10 +61,11 @@ bridgeDriver IR2304 = bridgeDriver();
 //define variables
 int invVoltMeas;
 double netFreq, phaseDiff, phaseOffset;
-bool signal, netFreqMeas, prevNetFreqMeas, netPhaseMeas, prevNetPhaseMeas, prevPWMDutyCycle;
+bool signal, netFreqMeas, prevNetFreqMeas, netPhaseMeas, prevNetPhaseMeas, prevPWMDutyCycle, prevPWMDutyCycleIsPositive;
 //unsigned long to not overflow the buffer
 unsigned long currentMillis, currentMicros, zeroPointMicros, timerMillis, timer2Millis, timer3Millis, startZeroPoint, endZeroPoint, loopTimer;
 unsigned long peakPointMicros, startOutputPeakPointMicros, endOutputPeakPointMicros, outputPeakPointMicros, theoOutputPeakPointMicros, startPeakPoint, endPeakPoint, loopStartMicros;
+unsigned long startPWMDutyCyclePosMicros, endPWMDutyCyclePosMicros;
 
 char printBuffer[100];
 
@@ -83,6 +84,16 @@ double phasePIDp=2, phasePIDi=1, phasePIDd=1;
 PID freqPID(&netFreq, &freqOutput, &freqSetPoint, freqPIDp, freqPIDi, freqPIDd, DIRECT);
 PID phasePID(&phaseDiff, &phaseOffset, &phaseSetPoint, phasePIDd, phasePIDi, phasePIDd, DIRECT);
 
+void IRAM_ATTR phaseMeasRise(){
+  startPeakPoint = micros();
+  Serial.println("Rise triggerd");
+}
+
+void IRAM_ATTR phaseMeasFall(){
+  endPeakPoint = micros();
+  peakPointMicrosBuf.push((startPeakPoint+((endPeakPoint-startPeakPoint)/2)));
+}
+
 void setup() {
   //set pin modes
   pinMode(LED_pin, OUTPUT);
@@ -90,6 +101,9 @@ void setup() {
   pinMode(safetyRelais2_pin, OUTPUT);
   pinMode(netFreqMeas_pin, INPUT);
   pinMode(netPhaseMeas_pin, INPUT);
+
+  attachInterrupt(netPhaseMeas_pin, phaseMeasRise, RISING);
+  attachInterrupt(netPhaseMeas_pin, phaseMeasFall, FALLING);
 
 /*
   // configure LED PWM functionalitites
@@ -121,7 +135,7 @@ void setup() {
 int readSensors(){
   //measure and save the voltage measurements
   netFreqMeas = 1-digitalRead(netFreqMeas_pin);
-  netPhaseMeas = digitalRead(netPhaseMeas_pin);
+  //netPhaseMeas = digitalRead(netPhaseMeas_pin);
 
   #if DEBUG_readings
     sprintf(printBuffer, "netFreqMeas : %d", netFreqMeas);
@@ -164,6 +178,8 @@ double calculateFrequency(){
 //calculate phase difference between measurement of the net and outputted sin signal
 int measurePhaseDiff(){
   //find the peaks of the sin by checking the measurements for the optocouplesrs and save the timestamp
+  
+  /*
   if (netPhaseMeas && !prevNetPhaseMeas){
     startPeakPoint = currentMicros;
     prevNetPhaseMeas = 1;
@@ -172,12 +188,13 @@ int measurePhaseDiff(){
     peakPointMicrosBuf.push((startPeakPoint+(endPeakPoint-startPeakPoint)/2));
     prevNetPhaseMeas = 0;
   }
+  */
 
   //10ms is 180degrees out of sync
   double halfWaveTime = (1000000.0/netFreq)*0.5;
 
   //difference between the peaks of the measured signal and produced sin for the pwm
-  int microsDiff = (peakPointMicrosBuf.last()-theoOutputPeakPointMicros);
+  int microsDiff = (peakPointMicrosBuf.first()-theoOutputPeakPointMicros);
 
   //remove whole wave differences
   double msPhaseDiff = fmod(double(microsDiff), halfWaveTime);
@@ -203,7 +220,7 @@ int writePWM(float freqOutput, double phaseOffset){
   loopTimer = currentMillis;
 
   #if DEBUG_pwm
-    freqOutput = 50;
+    freqOutput = 50.0;
     phaseOffset = 0;
   #endif
 
@@ -213,7 +230,27 @@ int writePWM(float freqOutput, double phaseOffset){
   if (fmod(double(loopTimer),(0.5*PI))){
     theoOutputPeakPointMicros = currentMicros;
   }
+
+  if (PWMDutyCycle == 100){
+    theoOutputPeakPointMicros = currentMicros;
+  }
   
+  /*
+  if (PWMDutyCycle == 0){
+    if (prevPWMDutyCycleIsPositive){
+      startPWMDutyCyclePosMicros = micros();
+    }else if (!prevPWMDutyCycleIsPositive){
+      endPWMDutyCyclePosMicros = micros();
+      outputPeakPointMicrosBuf.push(startPWMDutyCyclePosMicros+((endPWMDutyCyclePosMicros - startPWMDutyCyclePosMicros)/2));
+    }
+  }
+
+  if (PWMDutyCycle > 0){
+    prevPWMDutyCycleIsPositive = true;
+  } else if (PWMDutyCycle < 0){
+    prevPWMDutyCycleIsPositive = false;
+  }
+*/
 
   if (PWMDutyCycle > 80 && !prevPWMDutyCycle){
     startOutputPeakPointMicros = currentMicros;
@@ -224,28 +261,19 @@ int writePWM(float freqOutput, double phaseOffset){
     outputPeakPointMicrosBuf.push(startOutputPeakPointMicros+(endOutputPeakPointMicros - startOutputPeakPointMicros)/2);
   }
 
+
   #if DEBUG_dc
     if(PWMDutyCycle == 100){
       sprintf(printBuffer, "Dutycycle at 100 gives micros: %d and calc PPM: %d and theo PPM: %d", currentMicros, outputPeakPointMicrosBuf.last(), theoOutputPeakPointMicros);
       Serial.println(printBuffer);
     }
+    sprintf(printBuffer, "Dutycycle: %d", PWMDutyCycle);
+    Serial.println(printBuffer);
   #endif
 
-  //dont write a negative dutycycle
-  if (PWMDutyCycle >= 0){
-    IR2304.setDuty(PWMDutyCycle, 0);
-    //mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, PWMDutyCycle);
-    //mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_B, PWMDutyCycle);
-    //ledcWrite(PWMPosOutChannel, PWMDutyCycle);
-    //ledcWrite(PWMNegOutChannel, 0);
-  } else if (PWMDutyCycle < 0){
-    IR2304.setDuty(PWMDutyCycle, 0);
-    //mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, -PWMDutyCycle);
-    //mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_B, -PWMDutyCycle);
-    //ledcWrite(PWMNegOutChannel, -PWMDutyCycle);
-    //ledcWrite(PWMPosOutChannel, 0);
-  }
-  
+  //write the dutycycle
+  IR2304.setDuty(PWMDutyCycle, 0);
+
   return 0;
 }
 
@@ -324,7 +352,7 @@ void loop() {
 
   //wait 5 sec before enabling the safety
   if (currentMillis > 5000){
-    safetyCheck(netFreq);
+    //safetyCheck(netFreq);
   }
 
   //write the PWM for the H-bridge
