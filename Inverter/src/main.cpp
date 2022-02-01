@@ -86,7 +86,7 @@ PID phasePID(&phaseDiff, &phaseOffset, &phaseSetPoint, phasePIDd, phasePIDi, pha
 
 void IRAM_ATTR phaseMeasRise(){
   startPeakPoint = micros();
-  Serial.println("Rise triggerd");
+  Serial.printf("Rise triggerd");
 }
 
 void IRAM_ATTR phaseMeasFall(){
