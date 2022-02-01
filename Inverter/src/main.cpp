@@ -20,7 +20,7 @@ bridgeDriver IR2304 = bridgeDriver();
 #define DEBUG_readings 0
 #define DEBUG_pid 1
 #define DEBUG_freqCalc 0
-#define DEBUG_dc 1
+#define DEBUG_dc 0
 #define DEBUG_phase 1
 #define DEBUG_time 0
 
@@ -51,9 +51,9 @@ bridgeDriver IR2304 = bridgeDriver();
 #define PPMSamples 1 //peak point measuremets samples
 
 //how often to print the information in ms
-#define freqPrintDelay 5000
+#define freqPrintDelay 500
 #define phasePrintDelay 250
-#define timer3PrintDelay 2500
+#define timer3PrintDelay 250
 
 //define safety margins
 #define maxPhaseDiff 20
@@ -131,6 +131,9 @@ void setup() {
   //config the mcpwm
   IR2304.init(PWMA, PWMB, 0, 20000);
   IR2304.setInverting(true, 0);
+
+  mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM_SYNC_0, netPhaseMeas_pin);
+  mcpwm_sync_enable(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_SELECT_SYNC0, 0);
 }
 
 int readSensors(){
@@ -221,7 +224,7 @@ int writePWM(float freqOutput, double phaseOffset){
   loopTimer = currentMillis;
 
   #if DEBUG_pwm
-    freqOutput = 50.0;
+    freqOutput = 50;
     phaseOffset = 0;
   #endif
 
