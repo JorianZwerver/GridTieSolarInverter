@@ -20,7 +20,7 @@ bridgeDriver IR2304 = bridgeDriver();
 #define DEBUG_readings 0
 #define DEBUG_pid 1
 #define DEBUG_freqCalc 0
-#define DEBUG_dc 0
+#define DEBUG_dc 1
 #define DEBUG_phase 1
 #define DEBUG_time 0
 
@@ -195,7 +195,7 @@ int measurePhaseDiff(){
   double halfWaveTime = (1000000.0/netFreq)*0.5;
 
   //difference between the peaks of the measured signal and produced sin for the pwm
-  int microsDiff = (peakPointMicrosBuf.first()-theoOutputPeakPointMicros);
+  int microsDiff = (peakPointMicrosBuf.last()-theoOutputPeakPointMicros);
 
   //remove whole wave differences
   double msPhaseDiff = fmod(double(microsDiff), halfWaveTime);
