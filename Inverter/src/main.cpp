@@ -150,7 +150,7 @@ int writePWM(float freqOutput){
   loopTimer = currentMillis;
 
   #if DEBUG_pwm
-    freqOutput = 50;
+    freqOutput = 25;
   #endif
 
   //PWMDutyCycle = pow(2, PWMResolution)*sin(TWO_PI*freqOutput*loopTimer*0.001);
