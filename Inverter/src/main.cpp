@@ -198,7 +198,9 @@ int writePWM(float freqOutput){
     phaseOffset = 0;
   #endif
 
-  PWMDutyCycle = 100*sin((TWO_PI*freqOutput*loopTimer*0.001)+phaseOffset);
+  //PWMDutyCycle = 100*sin((TWO_PI*freqOutput*loopTimer*0.001)+phaseOffset);
+  PWMDutyCycle = 100*sin((TWO_PI*freqOutput*loopTimer*0.001));
+
 
   if (PWMDutyCycle == 100){
     outputPeakPointMicros = currentMicros;
@@ -272,8 +274,8 @@ void loop() {
   freqSetPoint = netFreq;
 
   //calculate the correction every loop using the PID algorithms
-  PWMPID.Compute();
-  phasePID.Compute();
+  //PWMPID.Compute();
+  //phasePID.Compute();
 
   #if DEBUG_pid
     sprintf(printBuffer, "freqOutput : %f", freqOutput);
