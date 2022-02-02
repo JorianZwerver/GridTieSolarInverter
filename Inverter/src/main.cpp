@@ -276,7 +276,11 @@ int writePWM(float freqOutput, double phaseOffset){
   #endif
 
   //write the dutycycle
-  IR2304.setDuty(PWMDutyCycle, 0);
+  if (PWMDutyCycle >= 0){
+    IR2304.setDuty(PWMDutyCycle, 0);
+  } else if (PWMDutyCycle < 0){
+    IR2304.setDuty(-PWMDutyCycle, 0);
+  }
 
   return 0;
 }
