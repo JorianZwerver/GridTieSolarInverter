@@ -51,7 +51,7 @@ bridgeDriver IR2304 = bridgeDriver();
 #define PPMSamples 1 //peak point measuremets samples
 
 //how often to print the information in ms
-#define freqPrintDelay 500
+#define freqPrintDelay 250
 #define phasePrintDelay 250
 #define timer3PrintDelay 250
 
