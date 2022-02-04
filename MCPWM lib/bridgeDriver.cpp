@@ -1,7 +1,9 @@
+// Libraries
 #include "bridgeDriver.h"
 #include "driver/mcpwm.h"
 #include "Arduino.h"
 
+// Initializes the correct MCPWM module with the correct frequency, duty cycle and unit.
 void bridgeDriver::init(int PWMA, int PWMB, int unit, int frequency) 
 {
     if(unit > 1 || unit < 0){ 
@@ -30,14 +32,16 @@ void bridgeDriver::init(int PWMA, int PWMB, int unit, int frequency)
 
 }
 
+// Updates the duty cycle of the PWM
 void bridgeDriver::setDuty(float duty_cycle, int unit)
 {
-    if(duty_cycle > 100 || duty_cycle < 0) {
+    if(duty_cycle < 100 || duty_cycle > 0) {
         mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, duty_cycle);
         mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_B, (100.0 - duty_cycle));
     } else { return; }
 }
 
+// Sets the unit to inverted or non-inverted PWM. Inverted PWM is PWM where the port one is on if port two is off and vice versa.
 void bridgeDriver::setInverting(bool inverting, int unit)
 {
     if(unit > 1 || unit < 0){ 
